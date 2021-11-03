@@ -66,6 +66,10 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
     (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
+    # Save results as csv
+    if not nosave:
+        results_csv = open(save_dir / 'results.csv', 'w')
+
     # Initialize
     set_logging()
     device = select_device(device)
@@ -186,13 +190,33 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             else:
                 p, s, im0, frame = path, '', im0s.copy(), getattr(dataset, 'frame', 0)
 
+            # Custom save path to preserve tree structure
             p = Path(p)  # to Path
-            save_path = str(save_dir / p.name)  # img.jpg
+            suffix = p.suffix
+
+            # Relative root
+            source_folder = Path(source)
+            # '**/*.*' is used to get images recursively from a fodler
+            if source[-6:] == '**/*.*':  # Called with a tree structure
+                source_folder = Path(source[:-6])
+            elif not source_folder.is_dir():  # Called with an image
+                source_folder = source_folder.parent
+            # else it was called with a directory
+
+            out_file_path = Path(str(p.with_name(p.stem)) + '_out' + suffix)
+            out_file_path = out_file_path.relative_to(Path.cwd()/source_folder)
+            save_path = str(save_dir / out_file_path)
+            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+
             txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # img.txt
             s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+
+            if not nosave :
+                results_csv.write(save_path + ',')
+
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
@@ -216,6 +240,19 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         annotator.box_label(xyxy, label, color=colors(c, True))
                         if save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                    
+                    # Save results as csv, one image per line followed by boxes data
+                    if not nosave:
+                        results_csv.write(" {} {} {} {} {} {},".format(str(int(cls.detach().cpu().numpy())+1),   # class
+                                                                    str(int(conf.detach().cpu().numpy() * 100)), # confidence
+                                                                    str(int(xyxy[0].detach().cpu().numpy())),  # x_min
+                                                                    str(int(xyxy[1].detach().cpu().numpy())),  # y_min
+                                                                    str(int(xyxy[2].detach().cpu().numpy())),  # x_max
+                                                                    str(int(xyxy[3].detach().cpu().numpy())))) # y_max
+                
+            # Save results as csv
+            if not nosave :
+                results_csv.write("\n")
 
             # Print time (inference-only)
             print(f'{s}Done. ({t3 - t2:.3f}s)')
@@ -244,6 +281,10 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                             save_path += '.mp4'
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer[i].write(im0)
+
+    # Save results as csv
+    if not nosave :
+        results_csv.close()
 
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
