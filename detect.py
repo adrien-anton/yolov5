@@ -192,7 +192,6 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
             # Custom save path to preserve tree structure
             p = Path(p)  # to Path
-            suffix = p.suffix
 
             # Relative root
             source_folder = Path(source)
@@ -203,8 +202,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 source_folder = source_folder.parent
             # else it was called with a directory
 
-            out_file_path = Path(str(p.with_name(p.stem)) + '_out' + suffix)
-            out_file_path = out_file_path.relative_to(Path.cwd()/source_folder)
+            out_file_path = p.relative_to(Path.cwd() / source_folder)
             save_path = str(save_dir / out_file_path)
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
 
